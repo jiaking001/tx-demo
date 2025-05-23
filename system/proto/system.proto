@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package system;
+
+option go_package = "tx-demo/proto/system";
+
+// 系统服务
+service SystemService {
+  // 发送文件（流式响应）
+  rpc SendFile (SendFileRequest) returns (stream FileChunk);
+}
+
+// 发送文件请求
+message SendFileRequest {
+  string file_path = 1;
+}
+
+// 文件块
+message FileChunk {
+  bytes data = 1;
+  int64 offset = 2;
+  int64 total_size = 3;
+}
