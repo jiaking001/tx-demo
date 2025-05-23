@@ -5,6 +5,7 @@ import (
 	"net"
 	"tx-demo/pkg"
 	"tx-demo/repository"
+	systemService "tx-demo/system/service"
 
 	"go.uber.org/fx"
 	"go.uber.org/fx/fxevent"
@@ -22,11 +23,15 @@ func main() {
 		}),
 		fx.Provide(
 			repository.NewRepository,
+			// 数据库
 			repository.NewDB,
+			// Redis
 			repository.NewRedis,
 			repository.NewUserRepository,
 			repository.NewTransaction,
 			userService.NewUserServiceServer,
+			systemService.NewSystemServiceServer,
+
 			NewJwt,
 			NewGRPCServer,
 			NewConfig,

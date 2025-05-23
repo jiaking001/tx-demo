@@ -22,6 +22,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
+	// 注册
 	//registerReq := &user.RegisterRequest{
 	//	Username: "Alice",
 	//	Password: "password123",
@@ -32,6 +33,7 @@ func main() {
 	//}
 	//fmt.Printf("Register Response: %+v\n", registerResp)
 
+	// 登录
 	loginReq := &user.LoginRequest{
 		Username: "Alice",
 		Password: "password123",
@@ -42,6 +44,7 @@ func main() {
 	}
 	fmt.Printf("Login Response: %+v\n", loginResp)
 
+	// 获取用户信息
 	//userInfoResp, err := client.GetUserInfo(ctx, &emptypb.Empty{})
 	//if err != nil {
 	//	log.Fatalf("Failed to get user info: %v", err)
