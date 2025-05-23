@@ -33,7 +33,7 @@ func NewUserServiceServer(logger *zap.Logger, jwt *pkg.JWT, userRepo repository.
 
 // Register 用户注册（幂等）
 func (s UserServiceServer) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.RegisterResponse, error) {
-	s.logger.Info("Register called", zap.String("username", req.Username), zap.String("request_id", req.RequestId))
+	s.logger.Info("Register called", zap.String("username", req.Username))
 
 	_, err := s.userRepo.FindByUsername(req.Username)
 	// 检查用户名是否已存在（幂等）
