@@ -1,6 +1,9 @@
 # 构建阶段
 FROM golang:1.23.2-alpine AS builder
 
+ENV HTTP_PROXY=https://goproxy.cn,direct
+ENV HTTPS_PROXY=https://goproxy.cn,direct
+
 # 安装构建依赖
 RUN apk add --no-cache git gcc musl-dev
 
