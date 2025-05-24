@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"github.com/joho/godotenv"
 	"net"
 	"tx-demo/pkg"
 	"tx-demo/repository"
@@ -16,6 +17,9 @@ import (
 )
 
 func main() {
+	// 加载环境变量
+	_ = godotenv.Load("./.env")
+
 	fx.New(
 		fx.WithLogger(func() fxevent.Logger {
 			logger, _ := zap.NewDevelopment()

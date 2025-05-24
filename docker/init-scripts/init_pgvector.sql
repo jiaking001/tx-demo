@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS users (
      password varchar(255) NOT NULL,
     -- like 是关键字因此打上双引号
      "like" varchar(255),
-     like_embedding vector(1536),
+     like_embedding vector(1024),
      created_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
      updated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
     -- 添加软删除字段

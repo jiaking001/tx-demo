@@ -15,7 +15,7 @@ type User struct {
 	Username      string         `gorm:"type:varchar(100);notNull;unique"`
 	Password      string         `gorm:"type:varchar(255);notNull"`
 	Like          string         `gorm:"type:varchar(255);column:like"` // 使用 column 标签指定列名
-	LikeEmbedding []float64      `gorm:"type:vector(1536)"`
+	LikeEmbedding string         `gorm:"type:vector(1536)"`
 	CreatedAt     time.Time      `gorm:"type:timestamp;notNull;default:CURRENT_TIMESTAMP"`
 	UpdatedAt     time.Time      `gorm:"type:timestamp;notNull;default:CURRENT_TIMESTAMP"`
 	DeletedAt     gorm.DeletedAt `gorm:"index"` // 软删除字段

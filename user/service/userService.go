@@ -9,6 +9,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"gorm.io/gorm"
+	"os"
 	"tx-demo/pkg"
 	"tx-demo/repository"
 
@@ -50,12 +51,19 @@ func (s UserServiceServer) Register(ctx context.Context, req *pb.RegisterRequest
 	userID := pkg.GenerateUUID()
 	// 加密
 	hashedPassword := pkg.HashPassword(req.Password)
+	// 将喜好嵌入向量
+	likeEmbedding, err := pkg.NewClient(os.Getenv("DASHSCOPE_API_KEY")).GetEmbeddings(req.Like, "text-embedding-v3", "1024")
+	if err != nil {
+		// 如果嵌入过程中发生错误，则记录日志并返回内部错误
+		return nil, status.Errorf(codes.Internal, err.Error())
+	}
 
 	newUser := &model.User{
-		UserID:   userID,
-		Username: req.Username,
-		Password: hashedPassword,
-		Like:     req.Like,
+		UserID:        userID,
+		Username:      req.Username,
+		Password:      hashedPassword,
+		Like:          req.Like,
+		LikeEmbedding: pkg.ConvertToPGVector(likeEmbedding.Data[0].Embedding),
 	}
 
 	err = s.userRepo.CreateUser(newUser)
