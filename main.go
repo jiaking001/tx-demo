@@ -3,12 +3,14 @@ package main
 import (
 	"context"
 	"errors"
-	"github.com/joho/godotenv"
 	"net"
+	"net/http"
+	_ "net/http/pprof" // 导入 pprof 包
 	"tx-demo/pkg"
 	"tx-demo/repository"
 	systemService "tx-demo/system/service"
 
+	"github.com/joho/godotenv"
 	"go.uber.org/fx"
 	"go.uber.org/fx/fxevent"
 	"go.uber.org/zap"
@@ -49,12 +51,13 @@ func main() {
 			NewLogger,
 			NewJaegerTracer,
 		),
-		fx.Invoke(StartServer),
+		fx.Invoke(StartServer, StartPprofServer), // 调用 StartPprofServer 启动 pprof 服务器
 	).Run()
 }
 
 type Config struct {
-	GRPCPort string
+	GRPCPort  string
+	PprofPort string // 新增 pprof 端口配置
 }
 
 func NewJwt() *pkg.JWT {
@@ -66,7 +69,8 @@ func NewJwt() *pkg.JWT {
 
 func NewConfig() *Config {
 	return &Config{
-		GRPCPort: ":50051",
+		GRPCPort:  ":50051",
+		PprofPort: ":6060", // 默认 pprof 端口
 	}
 }
 
@@ -103,6 +107,25 @@ func StartServer(lc fx.Lifecycle, server *grpc.Server, config *Config, logger *z
 		OnStop: func(ctx context.Context) error {
 			logger.Info("stopping gRPC server")
 			server.GracefulStop()
+			return nil
+		},
+	})
+}
+
+func StartPprofServer(lc fx.Lifecycle, config *Config, logger *zap.Logger) {
+	lc.Append(fx.Hook{
+		OnStart: func(ctx context.Context) error {
+			go func() {
+				logger.Info("starting pprof server", zap.String("port", config.PprofPort))
+				if err := http.ListenAndServe(config.PprofPort, nil); err != nil {
+					logger.Error("failed to start pprof server", zap.Error(err))
+				}
+			}()
+			return nil
+		},
+		OnStop: func(ctx context.Context) error {
+			logger.Info("stopping pprof server")
+			// 这里没有直接关闭 http 服务器的方法，因为 http.ListenAndServe 是阻塞的
 			return nil
 		},
 	})
