@@ -1,6 +1,8 @@
 package service
 
 import (
+	"context"
+	"github.com/opentracing/opentracing-go"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -11,17 +13,23 @@ import (
 
 type SystemServiceServer struct {
 	system.UnimplementedSystemServiceServer
-	logger *zap.Logger
+	logger      *zap.Logger
+	opentracing opentracing.Tracer
 }
 
-func NewSystemServiceServer(logger *zap.Logger) SystemServiceServer {
+func NewSystemServiceServer(logger *zap.Logger, opentracing opentracing.Tracer) SystemServiceServer {
 	return SystemServiceServer{
 		logger: logger,
 	}
 }
 
 // SendFile 读取文件（以流的形式返回）
-func (s SystemServiceServer) SendFile(req *system.SendFileRequest, stream system.SystemService_SendFileServer) error {
+func (s SystemServiceServer) SendFile(ctx context.Context, req *system.SendFileRequest, stream system.SystemService_SendFileServer) error {
+	// 使用jeager实现链路追踪
+	span, ctx := opentracing.StartSpanFromContext(ctx, "SystemService.SendFile")
+	span.SetTag("file_path", req.FilePath)
+	defer span.Finish()
+
 	s.logger.Info("SendFile called", zap.String("file_path", req.FilePath))
 
 	// 打开文件

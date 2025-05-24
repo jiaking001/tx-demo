@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"io/ioutil"
 	"testing"
 
@@ -49,6 +50,7 @@ func TestSystemServiceServer_SendFile(t *testing.T) {
 	type args struct {
 		req    *system.SendFileRequest
 		stream system.SystemService_SendFileServer
+		ctx    context.Context
 	}
 	tests := []struct {
 		name    string
@@ -62,6 +64,7 @@ func TestSystemServiceServer_SendFile(t *testing.T) {
 				logger: logger,
 			},
 			args: args{
+				ctx: context.Background(),
 				req: &system.SendFileRequest{
 					FilePath: "../../resources/001.jpg",
 				},
@@ -75,6 +78,7 @@ func TestSystemServiceServer_SendFile(t *testing.T) {
 				logger: logger,
 			},
 			args: args{
+				ctx: context.Background(),
 				req: &system.SendFileRequest{
 					FilePath: "../../resources/002.mp3",
 				},
@@ -88,6 +92,7 @@ func TestSystemServiceServer_SendFile(t *testing.T) {
 				logger: logger,
 			},
 			args: args{
+				ctx: context.Background(),
 				req: &system.SendFileRequest{
 					FilePath: "../../resources/003.mp4",
 				},
@@ -102,7 +107,7 @@ func TestSystemServiceServer_SendFile(t *testing.T) {
 				UnimplementedSystemServiceServer: tt.fields.UnimplementedSystemServiceServer,
 				logger:                           tt.fields.logger,
 			}
-			if err := s.SendFile(tt.args.req, tt.args.stream); (err != nil) != tt.wantErr {
+			if err := s.SendFile(tt.args.ctx, tt.args.req, tt.args.stream); (err != nil) != tt.wantErr {
 				t.Errorf("SendFile() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if tt.wantErr {

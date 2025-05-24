@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"github.com/opentracing/opentracing-go"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -19,16 +20,18 @@ import (
 
 type UserServiceServer struct {
 	pb.UnimplementedUserServiceServer
-	logger   *zap.Logger
-	jwt      *pkg.JWT
-	userRepo repository.UserRepository
+	logger      *zap.Logger
+	jwt         *pkg.JWT
+	userRepo    repository.UserRepository
+	opentracing opentracing.Tracer
 }
 
-func NewUserServiceServer(logger *zap.Logger, jwt *pkg.JWT, userRepo repository.UserRepository) UserServiceServer {
+func NewUserServiceServer(logger *zap.Logger, jwt *pkg.JWT, userRepo repository.UserRepository, opentracing opentracing.Tracer) UserServiceServer {
 	return UserServiceServer{
-		logger:   logger,
-		jwt:      jwt,
-		userRepo: userRepo,
+		logger:      logger,
+		jwt:         jwt,
+		userRepo:    userRepo,
+		opentracing: opentracing,
 	}
 }
 
@@ -57,6 +60,11 @@ func (s UserServiceServer) Register(ctx context.Context, req *pb.RegisterRequest
 		// 如果嵌入过程中发生错误，则记录日志并返回内部错误
 		return nil, status.Errorf(codes.Internal, err.Error())
 	}
+
+	// 使用jeager实现链路追踪
+	span, ctx := opentracing.StartSpanFromContext(ctx, "UserService.Register")
+	span.SetTag("userId", userID)
+	defer span.Finish()
 
 	newUser := &model.User{
 		UserID:        userID,
@@ -98,6 +106,11 @@ func (s UserServiceServer) Login(ctx context.Context, req *pb.LoginRequest) (*pb
 		return nil, status.Errorf(codes.Internal, "Failed to process request")
 	}
 
+	// 使用jeager实现链路追踪
+	span, ctx := opentracing.StartSpanFromContext(ctx, "UserService.Login")
+	span.SetTag("userId", user.UserID)
+	defer span.Finish()
+
 	// 验证密码
 	if pkg.HashPassword(req.Password) != user.Password {
 		return nil, status.Errorf(codes.Unauthenticated, "密码错误")
@@ -126,6 +139,11 @@ func (s UserServiceServer) GetUserInfo(ctx context.Context, req *emptypb.Empty) 
 	if !ok {
 		return nil, status.Errorf(codes.Unauthenticated, "User not authenticated")
 	}
+
+	// 使用jeager实现链路追踪
+	span, ctx := opentracing.StartSpanFromContext(ctx, "UserService.GetUserInfo")
+	span.SetTag("userId", userID)
+	defer span.Finish()
 
 	var user *model.User
 
