@@ -4,18 +4,18 @@ import (
 	"context"
 	"fmt"
 	"github.com/redis/go-redis/v9"
+	"github.com/spf13/viper"
+	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"log"
 	"time"
 )
 
 const ctxTxKey = "TxKey"
 
 type Repository struct {
-	db     *gorm.DB
-	rdb    *redis.Client
-	logger *log.Logger
+	db  *gorm.DB
+	rdb *redis.Client
 }
 
 func NewRepository(
@@ -56,17 +56,19 @@ func (r *Repository) Transaction(ctx context.Context, fn func(ctx context.Contex
 	})
 }
 
-func NewDB() *gorm.DB {
+func NewDB(conf *viper.Viper) *gorm.DB {
 	var (
 		db  *gorm.DB
 		err error
 	)
 
-	dsn := "host=localhost user=postgres password=postgres dbname=postgres port=5432 sslmode=disable TimeZone=Asia/Shanghai"
-	driver := "postgres"
+	dsn := conf.GetString("data.db.user.dsn")
+	driver := conf.GetString("data.db.user.driver")
 
 	// GORM doc: https://gorm.io/docs/connecting_to_the_database.html
 	switch driver {
+	case "mysql":
+		db, err = gorm.Open(mysql.Open(dsn), &gorm.Config{})
 	case "postgres":
 		db, err = gorm.Open(postgres.New(postgres.Config{
 			DSN:                  dsn,
@@ -91,11 +93,11 @@ func NewDB() *gorm.DB {
 	return db
 }
 
-func NewRedis() *redis.Client {
+func NewRedis(conf *viper.Viper) *redis.Client {
 	rdb := redis.NewClient(&redis.Options{
-		Addr:     "localhost:6379",
-		Password: "",
-		DB:       0,
+		Addr:     conf.GetString("data.redis.addr"),
+		Password: conf.GetString("data.redis.password"),
+		DB:       conf.GetInt("data.redis.db"),
 	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

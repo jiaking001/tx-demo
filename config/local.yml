@@ -1,0 +1,25 @@
+env: local
+http:
+  #  host: 0.0.0.0
+  host: 127.0.0.1
+  port: 50051
+pprof:
+  port: 6060
+security:
+  jwt:
+    key: "tx-demo-key"
+  dashscope_api_key:
+  # 替换成你自己的 key
+    key: "your-api-key"
+data:
+  db:
+ #  user:
+ #    driver: mysql
+ #    dsn: root:123456@tcp(127.0.0.1:3380)/user?charset=utf8mb4&parseTime=True&loc=Local
+    user:
+      driver: postgres
+      dsn: host=localhost user=postgres password=postgres dbname=postgres port=5432 sslmode=disable TimeZone=Asia/Shanghai
+  redis:
+    addr: 127.0.0.1:6379
+    password: ""
+    db: 0

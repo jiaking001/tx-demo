@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 	"github.com/opentracing/opentracing-go"
+	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"gorm.io/gorm"
-	"os"
 	"tx-demo/pkg"
 	"tx-demo/repository"
 
@@ -24,14 +24,16 @@ type UserServiceServer struct {
 	jwt         *pkg.JWT
 	userRepo    repository.UserRepository
 	opentracing opentracing.Tracer
+	conf        *viper.Viper
 }
 
-func NewUserServiceServer(logger *zap.Logger, jwt *pkg.JWT, userRepo repository.UserRepository, opentracing opentracing.Tracer) UserServiceServer {
+func NewUserServiceServer(logger *zap.Logger, jwt *pkg.JWT, userRepo repository.UserRepository, opentracing opentracing.Tracer, conf *viper.Viper) UserServiceServer {
 	return UserServiceServer{
 		logger:      logger,
 		jwt:         jwt,
 		userRepo:    userRepo,
 		opentracing: opentracing,
+		conf:        conf,
 	}
 }
 
@@ -55,7 +57,7 @@ func (s UserServiceServer) Register(ctx context.Context, req *pb.RegisterRequest
 	// 加密
 	hashedPassword := pkg.HashPassword(req.Password)
 	// 将喜好嵌入向量
-	likeEmbedding, err := pkg.NewClient(os.Getenv("DASHSCOPE_API_KEY")).GetEmbeddings(req.Like, "text-embedding-v3", "1024")
+	likeEmbedding, err := pkg.NewClient(s.conf.GetString("security.dashscope_api_key")).GetEmbeddings(req.Like, "text-embedding-v3", "1024")
 	if err != nil {
 		// 如果嵌入过程中发生错误，则记录日志并返回内部错误
 		s.logger.Error("Embedding failed", zap.Error(err))

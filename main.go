@@ -3,14 +3,14 @@ package main
 import (
 	"context"
 	"errors"
+	"github.com/spf13/viper"
 	"net"
 	"net/http"
-	_ "net/http/pprof" // 导入 pprof 包
+	_ "net/http/pprof"
 	"tx-demo/pkg"
 	"tx-demo/repository"
 	systemService "tx-demo/system/service"
 
-	"github.com/joho/godotenv"
 	"go.uber.org/fx"
 	"go.uber.org/fx/fxevent"
 	"go.uber.org/zap"
@@ -27,7 +27,7 @@ import (
 
 func main() {
 	// 加载环境变量
-	_ = godotenv.Load("./.env")
+	// _ = godotenv.Load("./.env")
 
 	fx.New(
 		fx.WithLogger(func() fxevent.Logger {
@@ -45,6 +45,7 @@ func main() {
 			userService.NewUserServiceServer,
 			systemService.NewSystemServiceServer,
 
+			NewViper,
 			NewJwt,
 			NewGRPCServer,
 			NewConfig,
@@ -57,20 +58,31 @@ func main() {
 
 type Config struct {
 	GRPCPort  string
-	PprofPort string // 新增 pprof 端口配置
+	PprofPort string
 }
 
-func NewJwt() *pkg.JWT {
+func NewViper() *viper.Viper {
+	v := viper.New()
+	// 本地使用修改成config/local.yml
+	v.SetConfigFile("config/local-test.yml")
+	err := v.ReadInConfig()
+	if err != nil {
+		panic(errors.New("read config file failed: " + err.Error()))
+	}
+	return v
+}
+
+func NewJwt(conf *viper.Viper) *pkg.JWT {
 	return &pkg.JWT{
 		JwtIssuer: "tx-demo",
-		JwtKey:    []byte("tx-demo-key"),
+		JwtKey:    []byte(conf.GetString("security.jwt.key")),
 	}
 }
 
-func NewConfig() *Config {
+func NewConfig(conf *viper.Viper) *Config {
 	return &Config{
-		GRPCPort:  ":50051",
-		PprofPort: ":6060", // 默认 pprof 端口
+		GRPCPort:  ":" + conf.GetString("http.port"),
+		PprofPort: ":" + conf.GetString("pprof.port"),
 	}
 }
 
