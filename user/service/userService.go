@@ -39,8 +39,8 @@ func NewUserServiceServer(logger *zap.Logger, jwt *pkg.JWT, userRepo repository.
 func (s UserServiceServer) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.RegisterResponse, error) {
 	s.logger.Info("Register called", zap.String("username", req.Username))
 
+	// 1.检查用户名是否已存在（幂等）
 	_, err := s.userRepo.FindByUsername(req.Username)
-	// 检查用户名是否已存在（幂等）
 	if err == nil {
 		// 如果用户名已存在，则返回错误
 		return nil, status.Errorf(codes.AlreadyExists, "用户名已存在")
@@ -50,7 +50,7 @@ func (s UserServiceServer) Register(ctx context.Context, req *pb.RegisterRequest
 		return nil, status.Errorf(codes.Internal, "Failed to process request")
 	}
 
-	// 如果用户名不存在，创建新用户
+	// 2.如果用户名不存在，创建新用户
 	userID := pkg.GenerateUUID()
 	// 加密
 	hashedPassword := pkg.HashPassword(req.Password)
@@ -58,10 +58,11 @@ func (s UserServiceServer) Register(ctx context.Context, req *pb.RegisterRequest
 	likeEmbedding, err := pkg.NewClient(os.Getenv("DASHSCOPE_API_KEY")).GetEmbeddings(req.Like, "text-embedding-v3", "1024")
 	if err != nil {
 		// 如果嵌入过程中发生错误，则记录日志并返回内部错误
+		s.logger.Error("Embedding failed", zap.Error(err))
 		return nil, status.Errorf(codes.Internal, err.Error())
 	}
 
-	// 使用jeager实现链路追踪
+	// 3.使用jeager实现链路追踪
 	span, ctx := opentracing.StartSpanFromContext(ctx, "UserService.Register")
 	span.SetTag("userId", userID)
 	defer span.Finish()
@@ -74,6 +75,7 @@ func (s UserServiceServer) Register(ctx context.Context, req *pb.RegisterRequest
 		LikeEmbedding: pkg.ConvertToPGVector(likeEmbedding.Data[0].Embedding),
 	}
 
+	// 4.用户不存在,创建用户
 	err = s.userRepo.CreateUser(newUser)
 	if err != nil {
 		// 如果创建过程中发生其他错误，则记录日志并返回内部错误

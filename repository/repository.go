@@ -36,7 +36,7 @@ func NewTransaction(r *Repository) Transaction {
 	return r
 }
 
-// DB return tx
+// DB return ctx
 // If you need to create a Transaction, you must call DB(ctx) and Transaction(ctx,fn)
 func (r *Repository) DB(ctx context.Context) *gorm.DB {
 	v := ctx.Value(ctxTxKey)
@@ -48,6 +48,7 @@ func (r *Repository) DB(ctx context.Context) *gorm.DB {
 	return r.db.WithContext(ctx)
 }
 
+// Transaction 开启事务
 func (r *Repository) Transaction(ctx context.Context, fn func(ctx context.Context) error) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		ctx = context.WithValue(ctx, ctxTxKey, tx)

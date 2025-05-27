@@ -19,7 +19,8 @@ type SystemServiceServer struct {
 
 func NewSystemServiceServer(logger *zap.Logger, opentracing opentracing.Tracer) SystemServiceServer {
 	return SystemServiceServer{
-		logger: logger,
+		logger:      logger,
+		opentracing: opentracing,
 	}
 }
 
