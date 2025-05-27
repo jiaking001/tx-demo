@@ -291,5 +291,5 @@ CMD ["./main"]
 
 ```
 # 构建镜像
-docker build -t tx-demo -f deploy/docker/Dockerfile .
+docker build -t tx-demo -f docker/Dockerfile .
 ```
