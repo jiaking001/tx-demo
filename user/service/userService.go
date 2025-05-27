@@ -12,6 +12,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"gorm.io/gorm"
+	"os"
 	"tx-demo/pkg"
 	"tx-demo/repository"
 
@@ -46,11 +47,11 @@ func (s UserServiceServer) Register(ctx context.Context, req *pb.RegisterRequest
 	_, err := s.userRepo.FindByUsername(ctx, req.Username)
 	if err == nil {
 		// 如果用户名已存在，则返回错误
-		return nil, status.Errorf(codes.AlreadyExists, "用户名已存在")
+		return nil, status.Errorf(codes.AlreadyExists, pkg.ErrAccountAlreadyUse)
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		// 如果查询过程中发生其他错误，则记录日志并返回内部错误
 		s.logger.Error("Failed to check username existence", zap.Error(err))
-		return nil, status.Errorf(codes.Internal, "注册失败，请稍后再试")
+		return nil, status.Errorf(codes.Internal, pkg.ErrInternalServerError)
 	}
 
 	// 2.如果用户名不存在，创建新用户
@@ -58,11 +59,11 @@ func (s UserServiceServer) Register(ctx context.Context, req *pb.RegisterRequest
 	// 加密
 	hashedPassword := pkg.HashPassword(req.Password)
 	// 将喜好嵌入向量
-	likeEmbedding, err := pkg.NewClient(s.conf.GetString("security.dashscope_api_key")).GetEmbeddings(req.Like, "text-embedding-v3", "1024")
+	likeEmbedding, err := pkg.NewClient(os.Getenv("DASHSCOPE_API_KEY")).GetEmbeddings(req.Like, "text-embedding-v3", "1024")
 	if err != nil {
 		// 如果嵌入过程中发生错误，则记录日志并返回内部错误
 		s.logger.Error("Embedding failed", zap.Error(err))
-		return nil, status.Errorf(codes.Internal, "注册失败，请稍后再试")
+		return nil, status.Errorf(codes.Internal, pkg.ErrInternalServerError)
 	}
 
 	// 3.使用jeager实现链路追踪
@@ -83,7 +84,7 @@ func (s UserServiceServer) Register(ctx context.Context, req *pb.RegisterRequest
 	if err != nil {
 		// 如果创建过程中发生其他错误，则记录日志并返回内部错误
 		s.logger.Error("Failed to create user", zap.Error(err))
-		return nil, status.Errorf(codes.Internal, "Failed to create user")
+		return nil, status.Errorf(codes.Internal, pkg.ErrInternalServerError)
 	}
 
 	s.logger.Info("User registered successfully", zap.String("user_id", userID))
@@ -104,11 +105,11 @@ func (s UserServiceServer) Login(ctx context.Context, req *pb.LoginRequest) (*pb
 	user, err := s.userRepo.FindByUsername(ctx, req.Username)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, status.Errorf(codes.NotFound, "用户不存在")
+			return nil, status.Errorf(codes.NotFound, pkg.ErrUserNotFound)
 		}
 		// 如果查询过程中发生其他错误，则记录日志并返回内部错误
 		s.logger.Error("Failed to query user", zap.Error(err))
-		return nil, status.Errorf(codes.Internal, "Failed to process request")
+		return nil, status.Errorf(codes.Internal, pkg.ErrInternalServerError)
 	}
 
 	// 2.使用jeager实现链路追踪
@@ -118,7 +119,7 @@ func (s UserServiceServer) Login(ctx context.Context, req *pb.LoginRequest) (*pb
 
 	// 3.验证密码
 	if pkg.HashPassword(req.Password) != user.Password {
-		return nil, status.Errorf(codes.Unauthenticated, "密码错误")
+		return nil, status.Errorf(codes.Unauthenticated, pkg.ErrPassword)
 	}
 
 	// 4.生成JWT令牌
@@ -126,7 +127,7 @@ func (s UserServiceServer) Login(ctx context.Context, req *pb.LoginRequest) (*pb
 	if err != nil {
 		// 如果生成过程中发生错误，则记录日志并返回内部错误
 		s.logger.Error("Failed to generate token", zap.Error(err))
-		return nil, status.Errorf(codes.Internal, "Failed to generate token")
+		return nil, status.Errorf(codes.Internal, pkg.ErrInternalServerError)
 	}
 
 	s.logger.Info("User logged in successfully", zap.String("user_id", user.UserID))
@@ -144,20 +145,20 @@ func (s UserServiceServer) GetUserInfo(ctx context.Context, req *emptypb.Empty) 
 	// 1.从metadata获取token
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return nil, status.Errorf(codes.Unauthenticated, "metadata is not provided")
+		return nil, status.Errorf(codes.Unauthenticated, pkg.ErrUnauthorized)
 	}
 
 	tokens := md.Get("token")
 	if len(tokens) == 0 {
-		return nil, status.Errorf(codes.Unauthenticated, "token is not provided")
+		return nil, status.Errorf(codes.Unauthenticated, pkg.ErrUnauthorized)
 	}
 	token := tokens[0]
 
 	userId, err := pkg.ParseJWT(token, *s.jwt)
 	if err != nil {
-		// 如果解析过程中发生错误，则记录日志并返回未认证错误
+		// 如果解析过程中发生错误，则记录日志并返回错误
 		s.logger.Info("Parsing failed", zap.Error(err))
-		return nil, status.Errorf(codes.Unauthenticated, "User not authenticated")
+		return nil, status.Errorf(codes.Internal, pkg.ErrInternalServerError)
 	}
 
 	// 2.使用jeager实现链路追踪
@@ -171,11 +172,11 @@ func (s UserServiceServer) GetUserInfo(ctx context.Context, req *emptypb.Empty) 
 	user, err = s.userRepo.FindByUserID(ctx, userId)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, status.Errorf(codes.NotFound, "用户不存在")
+			return nil, status.Errorf(codes.NotFound, pkg.ErrUserNotFound)
 		}
 		// 如果查询过程中发生其他错误，则记录日志并返回内部错误
 		s.logger.Error("Failed to query user", zap.Error(err))
-		return nil, status.Errorf(codes.Internal, "Failed to process request")
+		return nil, status.Errorf(codes.Internal, pkg.ErrInternalServerError)
 	}
 
 	s.logger.Info("user info retrieved successfully", zap.String("user_id", user.UserID))

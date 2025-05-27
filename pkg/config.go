@@ -7,7 +7,7 @@ import (
 
 func NewViper() *viper.Viper {
 	v := viper.New()
-	// 本地使用修改成config/local.yml
+
 	v.SetConfigFile("config/local-test.yml")
 	err := v.ReadInConfig()
 	if err != nil {

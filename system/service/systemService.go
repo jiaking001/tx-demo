@@ -8,6 +8,7 @@ import (
 	"google.golang.org/grpc/status"
 	"io"
 	"os"
+	"tx-demo/pkg"
 	"tx-demo/system/proto"
 )
 
@@ -37,10 +38,10 @@ func (s SystemServiceServer) SendFile(ctx context.Context, req *system.SendFileR
 	file, err := os.Open(req.FilePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return status.Errorf(codes.NotFound, "文件不存在")
+			return status.Errorf(codes.NotFound, pkg.ErrFileNotFound)
 		}
 		s.logger.Error("Failed to open file", zap.Error(err))
-		return status.Errorf(codes.Internal, "Failed to open file")
+		return status.Errorf(codes.Internal, pkg.ErrInternalServerError)
 	}
 	defer file.Close()
 
@@ -48,7 +49,7 @@ func (s SystemServiceServer) SendFile(ctx context.Context, req *system.SendFileR
 	fileInfo, err := file.Stat()
 	if err != nil {
 		s.logger.Error("Failed to get file info", zap.Error(err))
-		return status.Errorf(codes.Internal, "Failed to get file info")
+		return status.Errorf(codes.Internal, pkg.ErrInternalServerError)
 	}
 	fileSize := fileInfo.Size()
 
@@ -65,7 +66,7 @@ func (s SystemServiceServer) SendFile(ctx context.Context, req *system.SendFileR
 				break
 			}
 			s.logger.Error("Failed to read file", zap.Error(err))
-			return status.Errorf(codes.Internal, "Failed to read file")
+			return status.Errorf(codes.Internal, pkg.ErrInternalServerError)
 		}
 
 		// 发送文件块
@@ -76,7 +77,7 @@ func (s SystemServiceServer) SendFile(ctx context.Context, req *system.SendFileR
 		}
 		if err := stream.Send(chunk); err != nil {
 			s.logger.Error("Failed to send file chunk", zap.Error(err))
-			return status.Errorf(codes.Internal, "Failed to send file chunk")
+			return status.Errorf(codes.Internal, pkg.ErrInternalServerError)
 		}
 
 		offset += int64(n)

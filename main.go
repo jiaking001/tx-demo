@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"github.com/joho/godotenv"
 	"github.com/spf13/viper"
 	"net"
 	"net/http"
@@ -22,8 +23,8 @@ import (
 )
 
 func main() {
-	// 加载环境变量
-	// _ = godotenv.Load("./.env")
+	//加载环境变量
+	_ = godotenv.Load("./.env")
 
 	fx.New(
 		fx.WithLogger(func() fxevent.Logger {
