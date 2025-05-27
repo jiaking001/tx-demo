@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -49,7 +50,7 @@ func (s UserServiceServer) Register(ctx context.Context, req *pb.RegisterRequest
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		// 如果查询过程中发生其他错误，则记录日志并返回内部错误
 		s.logger.Error("Failed to check username existence", zap.Error(err))
-		return nil, status.Errorf(codes.Internal, "Failed to process request")
+		return nil, status.Errorf(codes.Internal, "注册失败，请稍后再试")
 	}
 
 	// 2.如果用户名不存在，创建新用户
@@ -61,7 +62,7 @@ func (s UserServiceServer) Register(ctx context.Context, req *pb.RegisterRequest
 	if err != nil {
 		// 如果嵌入过程中发生错误，则记录日志并返回内部错误
 		s.logger.Error("Embedding failed", zap.Error(err))
-		return nil, status.Errorf(codes.Internal, err.Error())
+		return nil, status.Errorf(codes.Internal, "注册失败，请稍后再试")
 	}
 
 	// 3.使用jeager实现链路追踪
@@ -140,21 +141,34 @@ func (s UserServiceServer) Login(ctx context.Context, req *pb.LoginRequest) (*pb
 func (s UserServiceServer) GetUserInfo(ctx context.Context, req *emptypb.Empty) (*pb.UserInfoResponse, error) {
 	s.logger.Info("GetUserInfo called")
 
-	// 1.从上下文获取用户ID（通过认证中间件注入）
-	userID, ok := ctx.Value("user_id").(string)
+	// 1.从metadata获取token
+	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
+		return nil, status.Errorf(codes.Unauthenticated, "metadata is not provided")
+	}
+
+	tokens := md.Get("token")
+	if len(tokens) == 0 {
+		return nil, status.Errorf(codes.Unauthenticated, "token is not provided")
+	}
+	token := tokens[0]
+
+	userId, err := pkg.ParseJWT(token, *s.jwt)
+	if err != nil {
+		// 如果解析过程中发生错误，则记录日志并返回未认证错误
+		s.logger.Info("Parsing failed", zap.Error(err))
 		return nil, status.Errorf(codes.Unauthenticated, "User not authenticated")
 	}
 
 	// 2.使用jeager实现链路追踪
 	span, ctx := opentracing.StartSpanFromContext(ctx, "UserService.GetUserInfo")
-	span.SetTag("userId", userID)
+	span.SetTag("userId", userId)
 	defer span.Finish()
 
 	// 3.查询用户信息
 	var user *model.User
 
-	user, err := s.userRepo.FindByUserID(ctx, userID)
+	user, err = s.userRepo.FindByUserID(ctx, userId)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, status.Errorf(codes.NotFound, "用户不存在")

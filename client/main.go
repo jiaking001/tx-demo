@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/types/known/emptypb"
 	"log"
 	"time"
 
@@ -46,9 +48,16 @@ func main() {
 	fmt.Printf("Login Response: %+v\n", loginResp)
 
 	// 获取用户信息
-	//userInfoResp, err := client.GetUserInfo(ctx, &emptypb.Empty{})
-	//if err != nil {
-	//	log.Fatalf("Failed to get user info: %v", err)
-	//}
-	//fmt.Printf("User Info Response: %+v\n", userInfoResp)
+	// 使用metadata传递token
+	md := metadata.New(map[string]string{
+		// 设从请求头中获取到了 token
+		"token": loginResp.GetAccessToken(),
+	})
+	ctx = metadata.NewOutgoingContext(ctx, md)
+
+	userInfoResp, err := client.GetUserInfo(ctx, &emptypb.Empty{})
+	if err != nil {
+		log.Fatalf("Failed to get user info: %v", err)
+	}
+	fmt.Printf("User Info Response: %+v\n", userInfoResp)
 }
