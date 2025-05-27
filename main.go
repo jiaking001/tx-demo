@@ -15,14 +15,10 @@ import (
 	"go.uber.org/fx/fxevent"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/metadata"
 	user "tx-demo/user/proto"
 	userService "tx-demo/user/service"
 
 	"github.com/opentracing/opentracing-go"
-	"github.com/opentracing/opentracing-go/ext"
-	"github.com/uber/jaeger-client-go"
-	"github.com/uber/jaeger-client-go/config"
 )
 
 func main() {
@@ -45,12 +41,12 @@ func main() {
 			userService.NewUserServiceServer,
 			systemService.NewSystemServiceServer,
 
-			NewViper,
-			NewJwt,
+			pkg.NewViper,
+			pkg.NewJwt,
 			NewGRPCServer,
 			NewConfig,
-			NewLogger,
-			NewJaegerTracer,
+			pkg.NewLogger,
+			pkg.NewJaegerTracer,
 		),
 		fx.Invoke(StartServer, StartPprofServer), // 调用 StartPprofServer 启动 pprof 服务器
 	).Run()
@@ -61,24 +57,6 @@ type Config struct {
 	PprofPort string
 }
 
-func NewViper() *viper.Viper {
-	v := viper.New()
-	// 本地使用修改成config/local.yml
-	v.SetConfigFile("config/local-test.yml")
-	err := v.ReadInConfig()
-	if err != nil {
-		panic(errors.New("read config file failed: " + err.Error()))
-	}
-	return v
-}
-
-func NewJwt(conf *viper.Viper) *pkg.JWT {
-	return &pkg.JWT{
-		JwtIssuer: "tx-demo",
-		JwtKey:    []byte(conf.GetString("security.jwt.key")),
-	}
-}
-
 func NewConfig(conf *viper.Viper) *Config {
 	return &Config{
 		GRPCPort:  ":" + conf.GetString("http.port"),
@@ -86,19 +64,16 @@ func NewConfig(conf *viper.Viper) *Config {
 	}
 }
 
-func NewLogger() (*zap.Logger, error) {
-	return zap.NewDevelopment()
-}
-
 func NewGRPCServer(logger *zap.Logger, userSvc userService.UserServiceServer, tracer opentracing.Tracer) *grpc.Server {
 	server := grpc.NewServer(
-		grpc.UnaryInterceptor(JaegerServerInterceptor(tracer)),
+		grpc.UnaryInterceptor(pkg.JaegerServerInterceptor(tracer)),
 	)
 	user.RegisterUserServiceServer(server, &userSvc)
 	logger.Info("gRPC server created")
 	return server
 }
 
+// StartServer 启动 gRPC 服务器
 func StartServer(lc fx.Lifecycle, server *grpc.Server, config *Config, logger *zap.Logger) {
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
@@ -125,11 +100,13 @@ func StartServer(lc fx.Lifecycle, server *grpc.Server, config *Config, logger *z
 }
 
 func StartPprofServer(lc fx.Lifecycle, config *Config, logger *zap.Logger) {
+	server := &http.Server{Addr: config.PprofPort}
+
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
 			go func() {
 				logger.Info("starting pprof server", zap.String("port", config.PprofPort))
-				if err := http.ListenAndServe(config.PprofPort, nil); err != nil {
+				if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 					logger.Error("failed to start pprof server", zap.Error(err))
 				}
 			}()
@@ -137,65 +114,7 @@ func StartPprofServer(lc fx.Lifecycle, config *Config, logger *zap.Logger) {
 		},
 		OnStop: func(ctx context.Context) error {
 			logger.Info("stopping pprof server")
-			// 这里没有直接关闭 http 服务器的方法，因为 http.ListenAndServe 是阻塞的
-			return nil
+			return server.Shutdown(ctx)
 		},
 	})
-}
-
-func NewJaegerTracer() (opentracing.Tracer, func(), error) {
-	cfg := &config.Configuration{
-		ServiceName: "tx-demo",
-		Sampler: &config.SamplerConfig{
-			Type:  "const",
-			Param: 1,
-		},
-		Reporter: &config.ReporterConfig{
-			LogSpans:           true,
-			LocalAgentHostPort: "localhost:6831",
-		},
-	}
-
-	tracer, closer, err := cfg.NewTracer(config.Logger(jaeger.StdLogger))
-	if err != nil {
-		return nil, nil, err
-	}
-	opentracing.SetGlobalTracer(tracer)
-	return tracer, func() { closer.Close() }, nil
-}
-
-func JaegerServerInterceptor(tracer opentracing.Tracer) grpc.UnaryServerInterceptor {
-	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		md, ok := metadata.FromIncomingContext(ctx)
-		if !ok {
-			md = metadata.New(nil)
-		}
-		wireContext, err := tracer.Extract(opentracing.HTTPHeaders, metadataReaderWriter{md})
-		if err != nil && !errors.Is(err, opentracing.ErrSpanContextNotFound) {
-			zap.L().Error("Failed to extract span context", zap.Error(err))
-		}
-		span := tracer.StartSpan(info.FullMethod, ext.RPCServerOption(wireContext))
-		defer span.Finish()
-		ctx = opentracing.ContextWithSpan(ctx, span)
-		return handler(ctx, req)
-	}
-}
-
-type metadataReaderWriter struct {
-	metadata.MD
-}
-
-func (w metadataReaderWriter) Set(key, value string) {
-	w.MD.Set(key, value)
-}
-
-func (w metadataReaderWriter) ForeachKey(handler func(key, value string) error) error {
-	for k, vs := range w.MD {
-		for _, v := range vs {
-			if err := handler(k, v); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
 }

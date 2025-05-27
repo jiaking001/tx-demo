@@ -4,12 +4,20 @@ import (
 	"errors"
 	"fmt"
 	"github.com/dgrijalva/jwt-go"
+	"github.com/spf13/viper"
 	"time"
 )
 
 type JWT struct {
 	JwtIssuer string
 	JwtKey    []byte
+}
+
+func NewJwt(conf *viper.Viper) *JWT {
+	return &JWT{
+		JwtIssuer: "tx-demo",
+		JwtKey:    []byte(conf.GetString("security.jwt.key")),
+	}
 }
 
 // GenerateJWT 生成JWT令牌

@@ -99,7 +99,7 @@ func (s UserServiceServer) Login(ctx context.Context, req *pb.LoginRequest) (*pb
 
 	var user *model.User
 
-	// 查询用户是否存在
+	// 1.查询用户是否存在
 	user, err := s.userRepo.FindByUsername(ctx, req.Username)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -110,23 +110,25 @@ func (s UserServiceServer) Login(ctx context.Context, req *pb.LoginRequest) (*pb
 		return nil, status.Errorf(codes.Internal, "Failed to process request")
 	}
 
-	// 使用jeager实现链路追踪
+	// 2.使用jeager实现链路追踪
 	span, ctx := opentracing.StartSpanFromContext(ctx, "UserService.Login")
 	span.SetTag("userId", user.UserID)
 	defer span.Finish()
 
-	// 验证密码
+	// 3.验证密码
 	if pkg.HashPassword(req.Password) != user.Password {
 		return nil, status.Errorf(codes.Unauthenticated, "密码错误")
 	}
 
-	// 生成JWT令牌
+	// 4.生成JWT令牌
 	token, expiresIn, err := pkg.GenerateJWT(user.UserID, *s.jwt)
 	if err != nil {
 		// 如果生成过程中发生错误，则记录日志并返回内部错误
 		s.logger.Error("Failed to generate token", zap.Error(err))
 		return nil, status.Errorf(codes.Internal, "Failed to generate token")
 	}
+
+	s.logger.Info("User logged in successfully", zap.String("user_id", user.UserID))
 
 	return &pb.LoginResponse{
 		AccessToken: token,
@@ -138,17 +140,18 @@ func (s UserServiceServer) Login(ctx context.Context, req *pb.LoginRequest) (*pb
 func (s UserServiceServer) GetUserInfo(ctx context.Context, req *emptypb.Empty) (*pb.UserInfoResponse, error) {
 	s.logger.Info("GetUserInfo called")
 
-	// 从上下文获取用户ID（通过认证中间件注入）
+	// 1.从上下文获取用户ID（通过认证中间件注入）
 	userID, ok := ctx.Value("user_id").(string)
 	if !ok {
 		return nil, status.Errorf(codes.Unauthenticated, "User not authenticated")
 	}
 
-	// 使用jeager实现链路追踪
+	// 2.使用jeager实现链路追踪
 	span, ctx := opentracing.StartSpanFromContext(ctx, "UserService.GetUserInfo")
 	span.SetTag("userId", userID)
 	defer span.Finish()
 
+	// 3.查询用户信息
 	var user *model.User
 
 	user, err := s.userRepo.FindByUserID(ctx, userID)
@@ -160,6 +163,8 @@ func (s UserServiceServer) GetUserInfo(ctx context.Context, req *emptypb.Empty) 
 		s.logger.Error("Failed to query user", zap.Error(err))
 		return nil, status.Errorf(codes.Internal, "Failed to process request")
 	}
+
+	s.logger.Info("user info retrieved successfully", zap.String("user_id", user.UserID))
 
 	return &pb.UserInfoResponse{
 		UserId:   user.UserID,
