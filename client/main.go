@@ -26,7 +26,7 @@ func main() {
 
 	// 注册
 	registerReq := &user.RegisterRequest{
-		Username: "Jack",
+		Username: "K",
 		Password: "password123",
 		Like:     "sleep",
 	}
@@ -38,7 +38,7 @@ func main() {
 
 	// 登录
 	loginReq := &user.LoginRequest{
-		Username: "John",
+		Username: "Alice",
 		Password: "password123",
 	}
 	loginResp, err := client.Login(ctx, loginReq)
