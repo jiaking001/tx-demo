@@ -40,7 +40,7 @@ func (s UserServiceServer) Register(ctx context.Context, req *pb.RegisterRequest
 	s.logger.Info("Register called", zap.String("username", req.Username))
 
 	// 1.检查用户名是否已存在（幂等）
-	_, err := s.userRepo.FindByUsername(req.Username)
+	_, err := s.userRepo.FindByUsername(ctx, req.Username)
 	if err == nil {
 		// 如果用户名已存在，则返回错误
 		return nil, status.Errorf(codes.AlreadyExists, "用户名已存在")
@@ -76,7 +76,7 @@ func (s UserServiceServer) Register(ctx context.Context, req *pb.RegisterRequest
 	}
 
 	// 4.用户不存在,创建用户
-	err = s.userRepo.CreateUser(newUser)
+	err = s.userRepo.CreateUser(ctx, newUser)
 	if err != nil {
 		// 如果创建过程中发生其他错误，则记录日志并返回内部错误
 		s.logger.Error("Failed to create user", zap.Error(err))
@@ -98,7 +98,7 @@ func (s UserServiceServer) Login(ctx context.Context, req *pb.LoginRequest) (*pb
 	var user *model.User
 
 	// 查询用户是否存在
-	user, err := s.userRepo.FindByUsername(req.Username)
+	user, err := s.userRepo.FindByUsername(ctx, req.Username)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, status.Errorf(codes.NotFound, "用户不存在")
@@ -149,7 +149,7 @@ func (s UserServiceServer) GetUserInfo(ctx context.Context, req *emptypb.Empty) 
 
 	var user *model.User
 
-	user, err := s.userRepo.FindByUserID(userID)
+	user, err := s.userRepo.FindByUserID(ctx, userID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, status.Errorf(codes.NotFound, "用户不存在")
