@@ -107,17 +107,15 @@ func (l *RedisLock) autoRenew(ctx context.Context) {
 			// 续期逻辑
 			if err := l.renew(ctx); err != nil {
 				// 续期失败，停止续期,并记录日志
-				l.logger.Error("failed to renew lock", zap.Error(err))
-				close(l.stopRenew)
+				l.logger.Error("failed to renew lock", zap.String("key", l.key), zap.String("value", l.value), zap.Error(err))
 				return
 			}
-		// 需要续期时传入信号
+		// 手动续期
 		case <-l.renewCh:
 			// 续期逻辑
 			if err := l.renew(ctx); err != nil {
 				// 续期失败，停止续期,并记录日志
-				l.logger.Error("failed to renew lock", zap.Error(err))
-				close(l.stopRenew)
+				l.logger.Error("failed to renew lock", zap.String("key", l.key), zap.String("value", l.value), zap.Error(err))
 				return
 			}
 		case <-ctx.Done():
