@@ -42,6 +42,7 @@ func main() {
 			userService.NewUserServiceServer,
 			systemService.NewSystemServiceServer,
 
+			pkg.NewRedisLock,
 			pkg.NewViper,
 			pkg.NewJwt,
 			NewGRPCServer,

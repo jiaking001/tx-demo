@@ -2,6 +2,7 @@ package pkg
 
 const (
 	ErrInternalServerError = "系统异常，请稍后再试"
+	ErrServiceBusy         = "服务器繁忙，请稍后再试"
 )
 
 const (

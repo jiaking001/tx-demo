@@ -25,20 +25,20 @@ func main() {
 	defer cancel()
 
 	// 注册
-	registerReq := &user.RegisterRequest{
-		Username: "K",
-		Password: "password123",
-		Like:     "sleep",
-	}
-	registerResp, err := client.Register(ctx, registerReq)
-	if err != nil {
-		log.Fatalf("Failed to register: %v", err)
-	}
-	fmt.Printf("Register Response: %+v\n", registerResp)
+	//registerReq := &user.RegisterRequest{
+	//	Username: "WECUNGE",
+	//	Password: "password123",
+	//	Like:     "sleep",
+	//}
+	//registerResp, err := client.Register(ctx, registerReq)
+	//if err != nil {
+	//	log.Fatalf("Failed to register: %v", err)
+	//}
+	//fmt.Printf("Register Response: %+v\n", registerResp)
 
 	// 登录
 	loginReq := &user.LoginRequest{
-		Username: "Alice",
+		Username: "WECUNGE",
 		Password: "password123",
 	}
 	loginResp, err := client.Login(ctx, loginReq)

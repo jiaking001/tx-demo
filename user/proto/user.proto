@@ -24,6 +24,7 @@ message RegisterRequest {
   string username = 1;
   string password = 2;
   string like = 3; // 用户喜好
+  string idempotency_key = 4; // 幂等性令牌
 }
 
 // 注册响应

@@ -3,7 +3,9 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/opentracing/opentracing-go"
+	"github.com/redis/go-redis/v9"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
@@ -26,15 +28,17 @@ type UserServiceServer struct {
 	userRepo    repository.UserRepository
 	opentracing opentracing.Tracer
 	conf        *viper.Viper
+	rdb         *redis.Client
 }
 
-func NewUserServiceServer(logger *zap.Logger, jwt *pkg.JWT, userRepo repository.UserRepository, opentracing opentracing.Tracer, conf *viper.Viper) UserServiceServer {
+func NewUserServiceServer(logger *zap.Logger, jwt *pkg.JWT, userRepo repository.UserRepository, opentracing opentracing.Tracer, conf *viper.Viper, rdb *redis.Client) UserServiceServer {
 	return UserServiceServer{
 		logger:      logger,
 		jwt:         jwt,
 		userRepo:    userRepo,
 		opentracing: opentracing,
 		conf:        conf,
+		rdb:         rdb,
 	}
 }
 
@@ -42,8 +46,32 @@ func NewUserServiceServer(logger *zap.Logger, jwt *pkg.JWT, userRepo repository.
 func (s UserServiceServer) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.RegisterResponse, error) {
 	s.logger.Info("Register called", zap.String("username", req.Username))
 
-	// 1.检查用户名是否已存在（幂等）
-	_, err := s.userRepo.FindByUsername(ctx, req.Username)
+	// 获取分布式锁保证幂等性
+	lockKey := fmt.Sprintf("register:lock:%s", req.Username)
+	lock := pkg.NewRedisLock(s.rdb, s.logger, lockKey, pkg.DefaultLockConfig)
+	acquired, err := lock.Lock(ctx)
+	if err != nil {
+		// 如果获取锁失败，则记录日志并返回内部错误
+		s.logger.Error("Failed to acquire lock", zap.Error(err))
+		return nil, status.Errorf(codes.Internal, pkg.ErrInternalServerError)
+	}
+	if !acquired {
+		// 如果未能获取锁，则返回资源冲突错误
+		return nil, status.Error(codes.ResourceExhausted, pkg.ErrServiceBusy)
+	}
+
+	defer func() {
+		// 保证锁的释放
+		if r := recover(); r != nil {
+			s.logger.Error("Panic occurred during registration", zap.Any("recover", r))
+		}
+		if err := lock.Unlock(ctx); err != nil {
+			s.logger.Error("Failed to release lock", zap.Error(err))
+		}
+	}()
+
+	// 1.检查用户名是否已存在
+	_, err = s.userRepo.FindByUsername(ctx, req.Username)
 	if err == nil {
 		// 如果用户名已存在，则返回错误
 		return nil, status.Errorf(codes.AlreadyExists, pkg.ErrAccountAlreadyUse)
@@ -54,7 +82,7 @@ func (s UserServiceServer) Register(ctx context.Context, req *pb.RegisterRequest
 	}
 
 	// 2.如果用户名不存在，创建新用户
-	userID := pkg.GenerateUUID()
+	userId := pkg.GenerateUUID()
 	// 加密
 	hashedPassword := pkg.HashPassword(req.Password)
 	// 将喜好嵌入向量
@@ -67,11 +95,11 @@ func (s UserServiceServer) Register(ctx context.Context, req *pb.RegisterRequest
 
 	// 3.使用jeager实现链路追踪
 	span, ctx := opentracing.StartSpanFromContext(ctx, "UserService.Register")
-	span.SetTag("userId", userID)
+	span.SetTag("userId", userId)
 	defer span.Finish()
 
 	newUser := &model.User{
-		UserID:        userID,
+		UserID:        userId,
 		Username:      req.Username,
 		Password:      hashedPassword,
 		Like:          req.Like,
@@ -86,10 +114,10 @@ func (s UserServiceServer) Register(ctx context.Context, req *pb.RegisterRequest
 		return nil, status.Errorf(codes.Internal, pkg.ErrInternalServerError)
 	}
 
-	s.logger.Info("User registered successfully", zap.String("user_id", userID))
+	s.logger.Info("User registered successfully", zap.String("user_id", req.Username))
 
 	return &pb.RegisterResponse{
-		UserId:  userID,
+		UserId:  req.Username,
 		Message: "注册成功！",
 	}, nil
 }

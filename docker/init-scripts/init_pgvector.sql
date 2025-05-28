@@ -19,3 +19,5 @@ CREATE TABLE IF NOT EXISTS users (
 
 -- 为deleted_at字段添加索引，提高查询性能
 CREATE INDEX IF NOT EXISTS idx_users_deleted_at ON users(deleted_at);
+-- 为username字段添加索引，提高查询性能
+CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
